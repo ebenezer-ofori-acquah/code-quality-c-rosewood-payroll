@@ -2,6 +2,11 @@ package com.rosewood.payroll;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -11,8 +16,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -27,7 +30,7 @@ class PayrollCalculatorTest {
 
     @BeforeEach
     void setUp() {
-        calculator = new PayrollCalculator(repository);
+        calculator = new PayrollCalculator(repository, ThresholdTaxBandSelector.standard());
     }
 
     @Nested
@@ -77,34 +80,50 @@ class PayrollCalculatorTest {
 
             assertEquals(0.0, net, DELTA);
         }
-
-        @Test
-        void rejectsNullRepository() {
-            NullPointerException exception = assertThrows(
-                    NullPointerException.class,
-                    () -> new PayrollCalculator(null));
-
-            assertEquals("repository must not be null", exception.getMessage());
-        }
     }
 
     @Nested
     class BoundariesAndTaxBands {
 
         @ParameterizedTest
-        @CsvSource({
-                "41, 20, 788.5", // overtime just above 40h; gross 830 -> 5% tax
-                "40, 25, 850.0", // exact 1000 gross threshold -> 15% tax (gross < 1000 is false)
-                "39, 25, 926.25", // gross 975 just below 1000 -> 5% tax
-                "40, 125, 3750.0", // exact 5000 gross threshold -> 25% tax (gross < 5000 is false)
-                "40, 124, 4216.0" // gross 4960 just below 5000 -> 15% tax
-        })
-        void evaluatesOvertimeAndTaxBoundaries(double hours, double rate, double expectedNet) {
+        @CsvSource({"41, 20, 788.5", "40, 20, 760.0"})
+        void evaluatesOvertimeBoundaries(double hours, double rate, double expectedNet) {
             when(repository.findById("e1")).thenReturn(new Employee("e1", "Efua Sarpong"));
 
             double net = calculator.calculateNetPay("e1", hours, rate);
 
             assertEquals(expectedNet, net, DELTA);
+        }
+
+        @ParameterizedTest
+        @CsvSource({
+                "40, 25, 850.0",
+                "39, 25, 926.25",
+                "40, 125, 3750.0",
+                "40, 124, 4216.0"
+        })
+        void evaluatesTaxBandBoundaries(double hours, double rate, double expectedNet) {
+            when(repository.findById("e1")).thenReturn(new Employee("e1", "Efua Sarpong"));
+
+            double net = calculator.calculateNetPay("e1", hours, rate);
+
+            assertEquals(expectedNet, net, DELTA);
+        }
+
+        @Test
+        void calculatesWithAnInjectedAdditionalTaxBand() {
+            TaxBandSelector selector = new ThresholdTaxBandSelector(List.of(
+                    new TaxBand(1000.0, 0.05),
+                    new TaxBand(2000.0, 0.12),
+                    new TaxBand(5000.0, 0.15),
+                    new TaxBand(Double.POSITIVE_INFINITY, 0.25)));
+            PayrollCalculator calculatorWithAdditionalBand =
+                    new PayrollCalculator(repository, selector);
+            when(repository.findById("e1")).thenReturn(new Employee("e1", "Efua Sarpong"));
+
+            double net = calculatorWithAdditionalBand.calculateNetPay("e1", 40, 37.5);
+
+            assertEquals(1320.0, net, DELTA);
         }
     }
 
@@ -112,8 +131,27 @@ class PayrollCalculatorTest {
     class FailuresAndValidation {
 
         @Test
+        void rejectsNullRepository() {
+            NullPointerException exception = assertThrows(
+                    NullPointerException.class,
+                    () -> new PayrollCalculator(null, ThresholdTaxBandSelector.standard()));
+
+            assertEquals("repository must not be null", exception.getMessage());
+        }
+
+        @Test
         void propagatesEmployeeNotFoundFromRepository() {
-            when(repository.findById("unknown")).thenThrow(new EmployeeNotFoundException("unknown"));
+            when(repository.findById("unknown"))
+                    .thenThrow(new EmployeeNotFoundException("unknown"));
+
+            assertThrows(
+                    EmployeeNotFoundException.class,
+                    () -> calculator.calculateNetPay("unknown", 40, 20));
+        }
+
+        @Test
+        void rejectsNullEmployeeReturnedByRepository() {
+            when(repository.findById("unknown")).thenReturn(null);
 
             assertThrows(
                     EmployeeNotFoundException.class,
@@ -153,6 +191,18 @@ class PayrollCalculatorTest {
             assertThrows(
                     ArithmeticException.class,
                     () -> calculator.calculateNetPay("e1", Double.MAX_VALUE, 2));
+        }
+
+        @Test
+        void rejectsNonFiniteNetPay() {
+            TaxBandSelector overflowingSelector = grossPay -> Double.MAX_VALUE;
+            PayrollCalculator calculatorWithOverflowingSelector = new PayrollCalculator(repository,
+                    overflowingSelector);
+            when(repository.findById("e1")).thenReturn(new Employee("e1", "Efua Sarpong"));
+
+            assertThrows(
+                    ArithmeticException.class,
+                    () -> calculatorWithOverflowingSelector.calculateNetPay("e1", 2, 1));
         }
 
         @ParameterizedTest

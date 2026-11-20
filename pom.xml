@@ -9,12 +9,12 @@
     <packaging>jar</packaging>
 
     <properties>
-        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.13.4</junit.version>
         <mockito.version>5.18.0</mockito.version>
-        <jacoco.version>0.8.12</jacoco.version>
-        <pitest.version>1.16.1</pitest.version>
+        <jacoco.version>0.8.14</jacoco.version>
+        <pitest.version>1.20.5</pitest.version>
         <pitest.junit5.version>1.2.1</pitest.junit5.version>
     </properties>
 
@@ -36,7 +36,6 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Lets PIT run JUnit 5 tests on the same platform version -->
         <dependency>
             <groupId>org.junit.platform</groupId>
             <artifactId>junit-platform-launcher</artifactId>
@@ -80,6 +79,35 @@
                         <phase>verify</phase>
                         <goals><goal>report</goal></goals>
                     </execution>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals><goal>check</goal></goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>INSTRUCTION</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>1.00</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>1.00</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>1.00</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
 
@@ -98,10 +126,25 @@
                 </dependencies>
                 <configuration>
                     <targetClasses>
-                        <param>com.rosewood.payroll.*</param>
+                        <param>com.rosewood.payroll.Demo</param>
+                        <param>com.rosewood.payroll.Employee</param>
+                        <param>com.rosewood.payroll.EmployeeNotFoundException</param>
+                        <param>com.rosewood.payroll.EmployeeRepository</param>
+                        <param>com.rosewood.payroll.GrossPayCalculator</param>
+                        <param>com.rosewood.payroll.InMemoryEmployeeRepository</param>
+                        <param>com.rosewood.payroll.PayrollCalculator</param>
+                        <param>com.rosewood.payroll.PayrollInputValidator</param>
+                        <param>com.rosewood.payroll.TaxBand</param>
+                        <param>com.rosewood.payroll.TaxBandSelector</param>
+                        <param>com.rosewood.payroll.ThresholdTaxBandSelector</param>
                     </targetClasses>
                     <targetTests>
-                        <param>com.rosewood.payroll.*</param>
+                        <param>com.rosewood.payroll.DemoTest</param>
+                        <param>com.rosewood.payroll.GrossPayCalculatorTest</param>
+                        <param>com.rosewood.payroll.InMemoryEmployeeRepositoryTest</param>
+                        <param>com.rosewood.payroll.PayrollCalculatorTest</param>
+                        <param>com.rosewood.payroll.TaxBandTest</param>
+                        <param>com.rosewood.payroll.ThresholdTaxBandSelectorTest</param>
                     </targetTests>
                 </configuration>
             </plugin>
