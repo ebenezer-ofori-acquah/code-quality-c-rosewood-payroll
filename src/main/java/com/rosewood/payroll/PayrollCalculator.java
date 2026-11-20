@@ -15,7 +15,7 @@ public class PayrollCalculator {
     private final EmployeeRepository repository;
 
     public PayrollCalculator(EmployeeRepository repository) {
-        this.repository = Objects.requireNonNull(repository);
+        this.repository = Objects.requireNonNull(repository, "repository must not be null");
     }
 
     public double calculateNetPay(String employeeId, double hoursWorked, double hourlyRate) {
